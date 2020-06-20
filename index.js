@@ -5,7 +5,10 @@ const Volume = require("pcm-volume");
 const EventEmitter = require("events");
 
 async function playSoundFile(path, volume) {
-	if (volume === 0) return;
+	if (volume === 0) {
+		console.log('volume', volume);
+		return;
+	}
 	return new Promise((resolve, reject) => {
 		try {
 			const file = fs.createReadStream(path);
@@ -36,9 +39,11 @@ async function playSoundFile(path, volume) {
 }
 
 class SoundLoop extends EventEmitter {
-	constructor(path, volume, autostart) {
+	constructor(path, volume, autostart, num_times) {
 		super();
 		this.path = path;
+		this.num_times = num_times;
+		this.count = 0;
 		this.setVolume(volume);
 		if (autostart) this.start();
 	}
@@ -46,33 +51,50 @@ class SoundLoop extends EventEmitter {
 		return this.volume;
 	}
 	setVolume(volume) {
+		if (volume < 0) volume = 0;
+		if (volume > 1) volume = 1;
 		this.volume = volume;
 	}
 	
 	start() {
+		if (this.playing) return;
+		this.count = 0;
 		this.playing = true;
 		this.loop();
 	}
 	
 	async loop() {
 		if (this.playing) {
+			this.count++;
 			this.emit('loop-begin');
 			// todo: this isn't a seemless loop, need to create a buffer/stream
 			await playSoundFile(this.path, this.volume);
 			this.emit('loop-end');
-			return this.loop(this.path, this.volume);
+			if (this.count >= this.num_times) {
+				this.stop();
+			}
+			else {
+				return this.loop(this.path, this.volume);
+			}
+		}
+		else {
+			this.stop();
 		}
 	}
 	
 	stop() {
+		if (this.playing) {
+			this.emit('stopped');
+		}
 		this.playing = false;
 	}
 }
 
-function loopSoundFile(path, volume, autostart) {
-	return new SoundLoop(path, volume, autostart);
+function loopSoundFile(path, volume, autostart, num_times) {
+	return new SoundLoop(path, volume, autostart, num_times);
 }
 
 module.exports = playSoundFile;
 
 module.exports.loopSoundFile = loopSoundFile;
+

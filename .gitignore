@@ -1,4 +1,4 @@
-/examples/test.wav
+*.wav
 /node_modules
 .idea/
 # misc

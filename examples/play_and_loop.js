@@ -1,4 +1,9 @@
-const {loopSoundFile} = require('../');
+/*
+DOESN'T WORK
+ */
+
+const playSoundFile = require('../');
+const {loopSoundFile} = playSoundFile;
 
 const player = loopSoundFile('./test.wav', 0.5);
 
@@ -35,3 +40,7 @@ function looper() {
 }
 
 looper()
+
+setInterval(function() {
+	playSoundFile('./test2.wav');
+},10000);
