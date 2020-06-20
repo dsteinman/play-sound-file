@@ -1,143 +1,78 @@
-module.exports = require('./playSoundFile');
+const fs = require('fs');
+const wav = require('wav');
+const Speaker = require('speaker');
+const Volume = require("pcm-volume");
+const EventEmitter = require("events");
 
-//
-// const Jaxcore = require('jaxcore');
-// const BumblebeeWebSocketPlugin = {
-// 	services: {
-// 		bumblebee: {
-// 			service: require('./BumblebeeWebsocketClient'),
-// 			storeType: 'client'
-// 		}
-// 	}
-// };
-//
-// function connect(options) {
-// 	if (!options) options = {};
-//
-// 	let websocketOptions = {
-// 		protocol: options.protocol || 'http',
-// 		host: options.host || 'localhost',
-// 		port: options.port || 37688,
-// 		options: {
-// 			reconnection: false
-// 		},
-// 		serviceTimeout: 10000
-// 	};
-//
-// 	return new Promise(function (resolve, reject) {
-// 		const jaxcore = new Jaxcore();
-// 		jaxcore.addPlugin(BumblebeeWebSocketPlugin);
-// 		// jaxcore.addDevice('bumblebee', BumblebeeDevice, 'client');
-//
-// 		function connectSocket(options) {
-// 			let wOptions = {
-// 				...websocketOptions
-// 			}
-// 			if (options) {
-// 				if (options.host) wOptions.host = options.host;
-// 				if (options.port) wOptions.port = options.port;
-// 			}
-//
-// 			let serviceProfileName = 'websocket:'+websocketOptions.host+':'+websocketOptions.port;
-//
-// 			jaxcore.defineService(serviceProfileName, 'bumblebee', wOptions);
-// 			// debugger;
-//
-// 			let didConnect = false;
-// 			jaxcore.startServiceProfile(serviceProfileName,(err, bbWebsocketClient) => {
-// 				if (err) {
-// 					reject(err);
-// 				}
-// 				else {
-// 					didConnect = true;
-//
-// 					// bbWebsocketClient.on('disconnect', function() {
-// 					// 	console.log('disconnected', bbWebsocketClient.id);
-// 					// 	// process.exit();
-// 					// })
-//
-// 					// debugger;
-// 					bbWebsocketClient.init(jaxcore);
-//
-// 					async function launchApp(AppAdapterClass) {
-// 						debugger;
-// 					}
-//
-// 					async function launchAssistant(hotword, assistantClass, assistantOptions) {
-// 						await bbWebsocketClient.registerAssistant(hotword, assistantClass, assistantOptions);
-//
-// 						let adapterProfileName = 'bbassistant:'+websocketOptions.host+':'+websocketOptions.port;
-//
-// 						jaxcore.addAdapter(adapterProfileName, assistantClass);
-// 						jaxcore.defineAdapter(adapterProfileName, {
-// 							adapterType: adapterProfileName,
-// 							websocketOptions,
-// 							serviceProfiles: [serviceProfileName]
-// 						});
-//
-// 						debugger;
-// 						jaxcore.connectAdapter(null, adapterProfileName, function(err, adapter) {
-// 							debugger;
-// 						});
-// 					}
-//
-// 					if (options.enableReconnect) {
-// 						bbWebsocketClient.on('disconnect', function() {
-// 							console.log('reconnecting...');
-// 							options.enableReconnect();
-// 						})
-// 					}
-//
-// 					console.log('bbWebsocketClient', typeof bbWebsocketClient);
-// 					const api = {
-// 						jaxcore,
-// 						bumblebee: bbWebsocketClient,
-// 						launchApp,
-// 						launchAssistant
-// 					};
-// 					global.api = api;
-// 					global.jaxcore = api.jaxcore;
-// 					resolve(api);
-// 				}
-// 			});
-// 		}
-//
-// 		jaxcore.on('service-disconnected', (type, device) => {
-// 			console.log('service-disconnected', type, device);
-// 			if (type === 'bumblebee') {
-// 				console.log('websocket service-disconnected', type, device.id);
-// 				console.log('reconnecting', device.id, '...');
-// 				process.exit();
-// 			}
-// 		});
-//
-// 		connectSocket(websocketOptions);
-// 	});
-// }
-//
-// function connectAssistant(hotword, assistantClass, options) {
-// 	async function _connect() {
-// 		try {
-// 			const api = await BumblebeeAPI.connect({
-// 				// enableReconnect: connect
-// 			});
-// 			const assistant = await api.launchAssistant(hotword, assistantClass, options);
-// 			console.log('assistant', assistant);
-//
-// 			api.enableReconnect = function(callback) {
-// 				api.bumblebee.on('disconnect', function() {
-// 					console.log('reconnecting...');
-// 					callback();
-// 				})
-// 			}
-// 			api.enableReconnect(_connect);
-//
-// 		}
-// 		catch(e) {
-// 			console.error('error:', e);
-// 			console.log('error reconnecting...');
-// 			_connect();
-// 		}
-// 	}
-// 	_connect();
-// }
+async function playSoundFile(path, volume) {
+	if (volume === 0) return;
+	return new Promise((resolve, reject) => {
+		try {
+			const file = fs.createReadStream(path);
+			const reader = new wav.Reader();
+			reader.on('format', function (format) {
+				const speaker = new Speaker(format);
+				
+				speaker.on('close', function () {
+					resolve();
+				});
+				
+				if (volume === null || typeof volume === 'undefined' || volume === 1) {
+					reader.pipe(speaker);
+				}
+				else {
+					const volumeStream = new Volume();
+					volumeStream.setVolume(volume);
+					volumeStream.pipe(speaker);
+					reader.pipe(volumeStream);
+				}
+			});
+			file.pipe(reader);
+		}
+		catch(e) {
+			reject(e);
+		}
+	});
+}
+
+class SoundLoop extends EventEmitter {
+	constructor(path, volume, autostart) {
+		super();
+		this.path = path;
+		this.setVolume(volume);
+		if (autostart) this.start();
+	}
+	getVolume() {
+		return this.volume;
+	}
+	setVolume(volume) {
+		this.volume = volume;
+	}
+	
+	start() {
+		this.playing = true;
+		this.loop();
+	}
+	
+	async loop() {
+		if (this.playing) {
+			this.emit('loop-begin');
+			// todo: this isn't a seemless loop, need to create a buffer/stream
+			await playSoundFile(this.path, this.volume);
+			this.emit('loop-end');
+			return this.loop(this.path, this.volume);
+		}
+	}
+	
+	stop() {
+		this.playing = false;
+	}
+}
+
+function loopSoundFile(path, volume, autostart) {
+	return new SoundLoop(path, volume, autostart);
+}
+
+module.exports = playSoundFile;
+
+module.exports.loopSoundFile = loopSoundFile;

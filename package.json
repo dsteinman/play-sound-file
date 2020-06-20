@@ -1,6 +1,6 @@
 {
   "name": "play-sound-file",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "async function that plays .wav files in NodeJS",
   "main": "index.js",
   "scripts": {
